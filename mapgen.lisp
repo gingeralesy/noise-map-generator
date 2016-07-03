@@ -39,7 +39,7 @@
         (dotimes (x width)
           (dotimes (y height)
             (let ((value (aref map x y)))
-              (q+:set-pixel image x y (elt *grays* (floor (* 255 value)))))))
+              (set-pixel image x y (elt *grays* (floor (* 255 value)))))))
         (v:log :info :mapgen "Redrawing the map of size (~a x ~a) took ~a ms."
                width height (- (internal-time-millis) start))
         (when (map-image genmap)
