@@ -1,5 +1,5 @@
 ;; This is an optimization for fast drawing of pixels into QImages made by Nicolas Hafner <shinmera@tymoon.eu>
-(in-package #:cl+qt)
+(in-package #:mapgen)
 (in-readtable :qtools)
 
 (defmacro with-stack (stack args &body body)
