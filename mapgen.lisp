@@ -39,7 +39,7 @@
         (dotimes (x width)
           (dotimes (y height)
             (let ((value (aref map x y)))
-              (set-pixel image x y (elt *grays* (floor (* 255 value)))))))
+              (set-pixel image x y (elt *grays* (floor value))))))
         (v:log :info :mapgen "Redrawing the map of size (~a x ~a) took ~a ms."
                width height (- (internal-time-millis) start))
         (when (map-image genmap)
@@ -50,13 +50,13 @@
 ;; Generators
 
 (defun interpolate (x0 x1 alpha)
-  (+ (* x0 (- 1 alpha)) (* alpha x1)))
+  (+ (* x0 (- 1.0 alpha)) (* alpha x1)))
 
 (defun gen-whitenoise (width height)
   (let ((noise (make-array (list width height) :initial-element 0)))
     (dotimes (x width)
       (dotimes (y height)
-        (setf (aref noise x y) (/ (random 10000) 10000))))
+        (setf (aref noise x y) (random 256))))
     noise))
 
 (defun gen-smooth-noise (base-noise octave)
