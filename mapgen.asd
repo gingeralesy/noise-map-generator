@@ -9,4 +9,5 @@
   :depends-on (:verbose
                :qtools
                :qtcore
-               :qtgui))
+               :qtgui
+               :for))

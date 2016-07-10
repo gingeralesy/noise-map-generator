@@ -2,55 +2,147 @@
 (in-readtable :qtools)
 
 (defvar *octave* 5)
-;; 0 is just base white noise
-;; 1 is for the smoothed out noise
-;; and anything else is the actual perlin noise
-(defvar *mode* 2)
-(defvar *debug-map-generation* NIL)
+(defvar *mode* NIL)
+
+(defparameter *small-blend* 16)
+(defparameter *medium-blend* 8)
+(defparameter *big-blend* 4)
 
 (defclass generated-map ()
   ((noise-map :initform NIL :accessor noise-map)
-   (map-image :initform NIL :accessor map-image)))
+   (map-image :initform NIL :accessor map-image)
+   (lightness :initform 0 :accessor lightness)
+   (tile-size :initform 1 :accessor tile-size)
+   (redraw :initform T :accessor redraw)))
 
 (defmethod paint ((genmap generated-map) target)
+  (when (redraw genmap)
+    (draw-map genmap))
   (let ((image (map-image genmap)))
     (when image
       (let ((rect (q+:rect image)))
         (q+:draw-image target rect image rect)))))
 
-(defmethod set-size ((genmap generated-map) width height)
-  (let ((old-map (noise-map genmap)))
-    (unless (and (not *debug-map-generation*)
-                 old-map
-                 (= width (first (array-dimensions old-map)))
-                 (= height (second (array-dimensions old-map))))
-      (let ((start (internal-time-millis)))
-        (let ((map (case *mode*
-                     ;; These are for debugging purposes, see *mode*
-                     (0 (gen-whitenoise width height))
-                     (1 (gen-smooth-noise (gen-whitenoise width height) *octave*))
-                     (T (gen-perlin-noise (gen-whitenoise width height) *octave*)))))
-          (setf (noise-map genmap) map))
-        (v:log :info :mapgen "Regeneration of the map of mode (~a), octave (~a), and size (~a x ~a) took ~a ms."
-               *mode* *octave* width height (- (internal-time-millis) start)))
-      (let ((image (q+:make-qimage width height (q+:qimage.format_argb32)))
-            (start (internal-time-millis))
-            (map (noise-map genmap)))
+(defmethod draw-map ((genmap generated-map))
+  (let ((map (noise-map genmap)))
+    (when map
+      (let* ((start (internal-time-millis))
+             (width (first (array-dimensions map)))
+             (height (second (array-dimensions map)))
+             (image (q+:make-qimage width height (q+:qimage.format_argb32))))
         (dotimes (x width)
           (dotimes (y height)
-            (let ((value (aref map x y)))
-              (set-pixel image x y (elt *grays* (floor value))))))
+            (let ((value (aref map x y))
+                  (light (* 10 (lightness genmap))))
+              (set-pixel image x y (elt *grays*
+                                        (if (= 0 light)
+                                            value
+                                            (if (< 0 light)
+                                                (if (< value light) 0 value)
+                                                (let ((light (+ 255 light)))
+                                                  (if (< light value) 255 value)))))))))
         (v:log :info :mapgen "Redrawing the map of size (~a x ~a) took ~a ms."
                width height (- (internal-time-millis) start))
         (when (map-image genmap)
           (finalize (map-image genmap))
           (setf (map-image genmap) NIL))
-        (setf (map-image genmap) image)))))
+        (setf (map-image genmap) image
+              (redraw genmap) NIL)))))
+
+(defmethod scroll ((genmap generated-map) delta)
+  (case *mode*
+    (T (lighten genmap delta))))
+
+(defmethod lighten ((genmap generated-map) delta)
+  (when (/= 0 delta)
+    (let ((light (min 25 (max -25 (+ (lightness genmap) delta)))))
+      (unless (= (lightness genmap) light)
+        (setf (lightness genmap) light
+              (redraw genmap) T)
+        (v:log :info :mapgen "Lightness is now ~a." (lightness genmap))))))
+
+(defmethod set-tile-size ((genmap generated-map) size)
+  (unless (= size (tile-size genmap))
+    (setf (tile-size genmap) size
+          (redraw genmap) T)))
+
+(defmethod set-size ((genmap generated-map) width height)
+  (let ((old-map (noise-map genmap))
+        (width (/ width (tile-size genmap)))
+        (height (/ height (tile-size genmap))))
+    (unless (and (not *debug*)
+                 old-map
+                 (= width (first (array-dimensions old-map)))
+                 (= height (second (array-dimensions old-map))))
+      (let ((start (internal-time-millis)))
+        (let ((map (gen-noise-map width height)))
+          (setf (noise-map genmap) map
+                (redraw genmap) T))
+        (v:log :info :mapgen "Generation of the map with octave (~a), and size (~a x ~a) took ~a ms."
+               *octave* width height (- (internal-time-millis) start))))))
 
 ;; Generators
 
+(defun blend-maps (&rest maps)
+  (let ((width 0) (height 0))
+    (for:for ((map in maps))
+          (let ((dimensions (array-dimensions map)))
+            (when (< width (first dimensions))
+              (setf width (first dimensions)))
+            (when (< height (second dimensions))
+              (setf height (second dimensions)))))
+    (let ((new-map (make-array (list width height) :initial-element 0)))
+      (dotimes (x width)
+        (dotimes (y height)
+          (let ((counter 0))
+            (for:for ((map over maps))
+              (unless (for:for ((a in (array-dimensions map))
+                                (b in (list x y)))
+                        (thereis (< a b)))
+                (incf (aref new-map x y) (aref map x y))
+                (incf counter)))
+            (setf (aref new-map x y) (floor (/ (aref new-map x y) counter))))))
+      new-map)))
+
 (defun interpolate (x0 x1 alpha)
   (+ (* x0 (- 1.0 alpha)) (* alpha x1)))
+
+(defun gen-noise-map (width height)
+  (let ((small (gen-perlin-noise (gen-whitenoise (ceiling (/ width *small-blend*)) (ceiling (/ height *small-blend*))) *octave*))
+        (medium (gen-perlin-noise (gen-whitenoise (ceiling (/ width *medium-blend*)) (ceiling (/ height *medium-blend*))) *octave*))
+        (big (gen-perlin-noise (gen-whitenoise (ceiling (/ width *big-blend*)) (ceiling (/ height *big-blend*))) *octave*)))
+    (setf small (resize-map small width height))
+    (setf medium (resize-map small width height))
+    (setf big (resize-map small width height))
+    (blend-maps small medium big)))
+
+(defun resize-map (map dest-width dest-height)
+  (let ((src-width (first (array-dimensions map)))
+        (src-height (second (array-dimensions map))))
+    (if (and (= src-width dest-width) (= src-height dest-height))
+        map
+        (let ((diff-x (/ dest-width src-width))
+              (diff-y (/ dest-height src-height))
+              (dest-map (make-array (list dest-width dest-height) :initial-element -1)))
+          (dotimes (x0 src-width)
+            (dotimes (y0 src-height)
+              (let* ((x1 (mod (1+ x0) src-width))
+                     (y1 (mod (1+ y0) src-height))
+                     (dest-x (mod (ceiling (* x0 diff-x)) dest-width))
+                     (dest-y (mod (ceiling (* y0 diff-y)) dest-height))
+                     (current (aref map x0 y0))
+                     (far-x (aref map x1 y0))
+                     (far-y (aref map x0 y1))
+                     (far-xy (aref map x1 y1)))
+                (dotimes (i (ceiling diff-x))
+                  (let ((mid-x (mod (+ dest-x i) dest-width))
+                        (near (interpolate current far-x (/ i diff-x)))
+                        (far (interpolate far-y far-xy (/ i diff-x))))
+                    ;; wherever you are...
+                    (dotimes (j (ceiling diff-y))
+                      (let ((mid-y (mod (+ dest-y j) dest-height)))
+                        (setf (aref dest-map mid-x mid-y) (interpolate near far (/ j diff-y))))))))))
+          dest-map))))
 
 (defun gen-whitenoise (width height)
   (let ((noise (make-array (list width height) :initial-element 0)))
@@ -80,7 +172,7 @@
                  (bottom (interpolate (aref base-noise sample-x0 sample-y1)
                                       (aref base-noise sample-x1 sample-y1)
                                       horiz-blend)))
-            (setf (aref smooth-noise x y) (interpolate top bottom verti-blend))))))
+            (setf (aref smooth-noise x y) (floor (interpolate top bottom verti-blend)))))))
     smooth-noise))
 
 (defun gen-perlin-noise (base-noise octave-count)
@@ -103,5 +195,5 @@
                   (incf (aref perlin-noise x y) (* (aref octave x y) amplitude))))))
       (dotimes (x width)
         (dotimes (y height)
-          (setf (aref perlin-noise x y) (/ (aref perlin-noise x y) total-amplitude))))
+          (setf (aref perlin-noise x y) (floor (/ (aref perlin-noise x y) total-amplitude)))))
       perlin-noise)))

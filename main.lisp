@@ -43,6 +43,10 @@
       (q+:fill-rect painter (q+:rect main) bgbrush)
       (paint (genmap main) painter))))
 
+(define-override (main wheel-event) (ev)
+  (with-simple-restart (abort "Abort wheel event.")
+    (scroll (genmap main) (/ (q+:delta ev) 24))))
+
 (defun internal-time-millis ()
   (/ (get-internal-real-time)
      (/ internal-time-units-per-second
