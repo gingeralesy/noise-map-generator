@@ -5,5 +5,4 @@
   (:export #:main))
 
 (in-package #:mapgen)
-(defparameter *debug* T)
-(setf (v:repl-level) (if *debug* :debug :warn))
+(setf (v:repl-level) :warn)

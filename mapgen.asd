@@ -5,7 +5,9 @@
   :components ((:file "package")
                (:file "fast-set-pixel")
                (:file "main")
-               (:file "mapgen"))
+               (:file "mapgen")
+               (:file "surface-map")
+               (:file "object-map"))
   :depends-on (:verbose
                :qtools
                :qtcore

@@ -32,7 +32,7 @@
           (dotimes (y height)
             (let ((value (aref map x y)))
               (set-pixel image x y (elt *grays* value)))))
-        (v:log :info :mapgen "Redrawing the map of size (~a x ~a) took ~a ms."
+        (v:log :debug :mapgen "Redrawing the map of size (~a x ~a) took ~a ms."
                width height (- (internal-time-millis) start))
         (when (map-image genmap)
           (finalize (map-image genmap))
@@ -42,15 +42,14 @@
 
 (defmethod set-size ((genmap generated-map) width height)
   (let ((old-map (noise-map genmap)))
-    (unless (and (not *debug*)
-                 old-map
+    (unless (and old-map
                  (= width (first (array-dimensions old-map)))
                  (= height (second (array-dimensions old-map))))
       (let ((start (internal-time-millis)))
         (let ((map (gen-noise-map width height)))
           (setf (noise-map genmap) map
                 (redraw genmap) T))
-        (v:log :info :mapgen "Generation of the map with octave (~a), and size (~a x ~a) took ~a ms."
+        (v:log :debug :mapgen "Generation of the map with octave (~a), and size (~a x ~a) took ~a ms."
                *octave* width height (- (internal-time-millis) start))))))
 
 ;; Generators

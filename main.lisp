@@ -5,7 +5,8 @@
 (defparameter *grays* (make-array '(256)))
 
 (define-widget main (QWidget)
-  ((genmap :initform NIL :accessor genmap)))
+  ((surface :initform NIL :accessor surface)
+   (objects :initform NIL :accessor objects)))
 
 (define-subwidget (main updater) (q+:make-qtimer main))
 
@@ -18,18 +19,24 @@
   (setf *main* main
         (q+:window-title main) "Map Generator"
         (q+:single-shot updater) T
-        (genmap main) (make-instance 'generated-map))
+        (surface main) (make-instance 'surface-map)
+        (objects main) (make-instance 'object-map))
   (q+:start updater (round (/ 1000 30))))
 
 (define-finalizer (main teardown)
   (v:info :mapgen.main "EXIT")
+  (finalize (surface main))
+  (finalize (objects main))
   (setf *main* NIL))
 
 (define-slot (main tick) ()
   (declare (connected updater (timeout)))
-  (let ((start (internal-time-millis))
-        (tile-size 8))
-    (set-size (genmap main) (ceiling (/ (q+:width main) tile-size)) (ceiling (/ (q+:height main) tile-size)))
+  (let* ((start (internal-time-millis))
+         (tile-size 8)
+         (width (ceiling (/ (q+:width main) tile-size)))
+         (height (ceiling (/ (q+:height main) tile-size))))
+    (set-size (surface main) width height)
+    (set-size (objects main) width height)
     (q+:repaint main)
     (q+:start updater (floor (max 0 (- (/ 1000 30)
                                        (- start (internal-time-millis))))))))
@@ -42,11 +49,8 @@
             (q+:color (q+:background painter)) (q+:qt.black)
             (q+:style (q+:brush painter)) (q+:qt.solid-pattern))
       (q+:fill-rect painter (q+:rect main) bgbrush)
-      (paint (genmap main) painter))))
-
-(define-override (main wheel-event) (ev)
-  (with-simple-restart (abort "Abort wheel event.")
-    (scroll (genmap main) (/ (q+:delta ev) 24))))
+      (paint (surface main) painter)
+      (paint (objects main) painter))))
 
 (defun internal-time-millis ()
   (/ (get-internal-real-time)
