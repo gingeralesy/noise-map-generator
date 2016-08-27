@@ -20,7 +20,13 @@
         (q+:window-title main) "Map Generator"
         (q+:single-shot updater) T
         (surface main) (make-instance 'surface-map)
-        (objects main) (make-instance 'object-map))
+        (objects main) (make-instance 'object-map
+                                      :objects (list (make-instance 'map-object
+                                                                    :zones '(150 190)
+                                                                    :colour (q+:make-qcolor 255 0 0))
+                                                     (make-instance 'map-object
+                                                                    :zones '(90 210)
+                                                                    :colour (q+:make-qcolor 0 0 255)))))
   (q+:start updater (round (/ 1000 30))))
 
 (define-finalizer (main teardown)
