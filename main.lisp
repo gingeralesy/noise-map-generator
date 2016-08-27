@@ -27,8 +27,9 @@
 
 (define-slot (main tick) ()
   (declare (connected updater (timeout)))
-  (let ((start (internal-time-millis)))
-    (set-size (genmap main) (ceiling (/ (q+:width main) 16)) (ceiling (/ (q+:height main) 16)))
+  (let ((start (internal-time-millis))
+        (tile-size 8))
+    (set-size (genmap main) (ceiling (/ (q+:width main) tile-size)) (ceiling (/ (q+:height main) tile-size)))
     (q+:repaint main)
     (q+:start updater (floor (max 0 (- (/ 1000 30)
                                        (- start (internal-time-millis))))))))
