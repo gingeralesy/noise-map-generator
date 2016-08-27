@@ -47,7 +47,7 @@
           (dotimes (y height)
             (let* ((value (aref map x y))
                    (tile-object (tile-object objmap value))
-                   (safe)
+                   (safe T)
                    (locations))
               (when tile-object
                 (let* ((min-dist (min-distance tile-object))
